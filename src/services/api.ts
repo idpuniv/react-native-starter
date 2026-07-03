@@ -1,9 +1,7 @@
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios from 'axios';
 import config from '@/app/config';
 
-// ─── Instance ─────────────────────────────────────────────────────────────────
-
-const api: AxiosInstance = axios.create({
+const api = axios.create({
   baseURL: `${config.API_BASE_URL}/${config.API_VERSION}`,
   timeout: 10_000,
   headers: {

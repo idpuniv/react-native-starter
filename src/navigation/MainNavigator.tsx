@@ -1,10 +1,16 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { LayoutDashboard, Settings } from 'lucide-react-native';
-import { MainTabParamList, MAIN_ROUTES } from './routes';
+import { LayoutDashboard, Layers, Settings } from 'lucide-react-native';
 import { DashboardScreen } from '@/screens/dashboard/DashboardScreen';
 import { SettingsScreen } from '@/screens/settings/SettingsScreen';
+import { FeaturesNavigator } from './FeaturesNavigator';
 import { useTheme } from '@/hooks/useTheme';
+
+export type MainTabParamList = {
+  Dashboard: undefined;
+  Features:  undefined;
+  Settings:  undefined;
+};
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -13,9 +19,9 @@ export function MainNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName={MAIN_ROUTES.DASHBOARD}
+      initialRouteName="Dashboard"
       screenOptions={({ route }) => ({
-        headerShown: false,
+        headerShown:            false,
         tabBarActiveTintColor:   theme.primary,
         tabBarInactiveTintColor: theme.text.secondary,
         tabBarStyle: {
@@ -24,9 +30,11 @@ export function MainNavigator() {
         },
         tabBarIcon: ({ color, size }) => {
           switch (route.name) {
-            case MAIN_ROUTES.DASHBOARD:
+            case 'Dashboard':
               return <LayoutDashboard color={color} size={size} />;
-            case MAIN_ROUTES.SETTINGS:
+            case 'Features':
+              return <Layers color={color} size={size} />;
+            case 'Settings':
               return <Settings color={color} size={size} />;
             default:
               return null;
@@ -35,12 +43,17 @@ export function MainNavigator() {
       })}
     >
       <Tab.Screen
-        name={MAIN_ROUTES.DASHBOARD}
+        name="Dashboard"
         component={DashboardScreen}
         options={{ tabBarLabel: 'Accueil' }}
       />
       <Tab.Screen
-        name={MAIN_ROUTES.SETTINGS}
+        name="Features"
+        component={FeaturesNavigator}
+        options={{ tabBarLabel: 'Features' }}
+      />
+      <Tab.Screen
+        name="Settings"
         component={SettingsScreen}
         options={{ tabBarLabel: 'Réglages' }}
       />
