@@ -5,8 +5,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused } from '@react-navigation/native';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-import { useBarcodeScannerOutput } from 'react-native-vision-camera-barcode-scanner';
+import {
+  Camera, useCameraDevice, useCameraPermission,
+  useFrameOutput,
+} from 'react-native-vision-camera';
+import { useBarcodeScanner } from 'react-native-vision-camera-barcode-scanner';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, runOnJS,
 } from 'react-native-reanimated';
@@ -15,7 +18,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { Loader } from '@/components/Loader';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-
 const FRAME_SIZE  = SCREEN_W * 0.65;
 const CORNER_SIZE = 28;
 const CORNER_W    = 3;
@@ -27,15 +29,7 @@ const INITIAL = {
   right:  (SCREEN_W + FRAME_SIZE) / 2,
   bottom: MASK_V + FRAME_SIZE,
 };
-
 const ANIM_CONFIG = { duration: 120 };
-
-// Résolution frame — à ajuster selon les logs
-const FRAME_W = 720;
-const FRAME_H = 1280;
-
-const RATIO_X = SCREEN_W / FRAME_W;
-const RATIO_Y = SCREEN_H / FRAME_H;
 
 interface Props { navigation: any; }
 
@@ -47,11 +41,8 @@ function AnimatedCorner({ x, y, type, color }: {
 }) {
   const style = useAnimatedStyle(() => {
     const base: any = {
-      position:    'absolute',
-      width:        CORNER_SIZE,
-      height:       CORNER_SIZE,
-      borderColor:  color.value,
-      borderWidth:  CORNER_W,
+      position: 'absolute', width: CORNER_SIZE, height: CORNER_SIZE,
+      borderColor: color.value, borderWidth: CORNER_W,
     };
     switch (type) {
       case 'TL': return { ...base, left: x.value,               top: y.value,               borderRightWidth: 0, borderBottomWidth: 0 };
@@ -68,9 +59,10 @@ export function QRCodeScannerScreen({ navigation }: Props) {
   const isFocused                            = useIsFocused();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device                               = useCameraDevice('back');
+  const cameraRef                            = useRef<any>(null);
 
+  const scannedShared = useSharedValue(false);
   const [scanned, setScanned] = useState(false);
-  const scannedRef            = useRef(false);
 
   const tlX = useSharedValue(INITIAL.left);
   const tlY = useSharedValue(INITIAL.top);
@@ -83,7 +75,7 @@ export function QRCodeScannerScreen({ navigation }: Props) {
   const cornerColor = useSharedValue('white');
 
   const reset = useCallback(() => {
-    scannedRef.current = false;
+    scannedShared.value = false;
     tlX.value = withTiming(INITIAL.left,   ANIM_CONFIG);
     tlY.value = withTiming(INITIAL.top,    ANIM_CONFIG);
     trX.value = withTiming(INITIAL.right,  ANIM_CONFIG);
@@ -97,33 +89,34 @@ export function QRCodeScannerScreen({ navigation }: Props) {
   }, []);
 
   const showAlert = useCallback((value: string) => {
-    Alert.alert(
-      'QR Code détecté ✓',
-      value,
-      [{ text: 'Scanner à nouveau', onPress: reset }],
-    );
+    Alert.alert('QR Code détecté ✓', value, [
+      { text: 'Scanner à nouveau', onPress: reset },
+    ]);
   }, [reset]);
 
-  const scannerOutput = useBarcodeScannerOutput({
-    barcodeFormats:   ['qr-code'],
-    outputResolution: 'preview',
-    onBarcodeScanned: useCallback((barcodes) => {
-      if (scannedRef.current || barcodes.length === 0) return;
+  // Reçoit les camera points (après convertFramePointToCameraPoint dans le worklet)
+  // et fait la conversion finale → view coordinates via cameraRef
+  const handleCameraPoints = useCallback((
+    value: string,
+    // 4 coins en camera coordinates : TL, TR, BR, BL
+    tlCx: number, tlCy: number,
+    trCx: number, trCy: number,
+    brCx: number, brCy: number,
+    blCx: number, blCy: number,
+  ) => {
+    const cam = cameraRef.current;
+    if (!cam) return;
 
-      const barcode = barcodes[0];
-      const value   = barcode.rawValue;
-      const bb      = barcode.boundingBox;
+    try {
+      const tl = cam.convertCameraPointToViewPoint({ x: tlCx, y: tlCy });
+      const tr = cam.convertCameraPointToViewPoint({ x: trCx, y: trCy });
+      const br = cam.convertCameraPointToViewPoint({ x: brCx, y: brCy });
+      const bl = cam.convertCameraPointToViewPoint({ x: blCx, y: blCy });
 
-      if (!value || !bb) return;
-
-      console.log('bb:', JSON.stringify(bb));
-
-      const left   = bb.left   * RATIO_X;
-      const top    = bb.top    * RATIO_Y;
-      const right  = bb.right  * RATIO_X;
-      const bottom = bb.bottom * RATIO_Y;
-
-      scannedRef.current = true;
+      const left   = Math.min(tl.x, bl.x);
+      const top    = Math.min(tl.y, tr.y);
+      const right  = Math.max(tr.x, br.x);
+      const bottom = Math.max(bl.y, br.y);
 
       tlX.value = withTiming(left,   ANIM_CONFIG);
       tlY.value = withTiming(top,    ANIM_CONFIG);
@@ -136,20 +129,58 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       cornerColor.value = '#22C55E';
 
       setScanned(true);
+      setTimeout(() => showAlert(value), 600);
+    } catch (e) {
+      // convertCameraPointToViewPoint peut throw si la vue n'est pas prête
+      scannedShared.value = false;
+    }
+  }, [showAlert]);
 
-      setTimeout(() => showAlert(value ?? ''), 400);
-    }, [showAlert]),
-    onError: (e) => console.error('Scanner error:', e),
+  const barcodeScanner = useBarcodeScanner({ barcodeFormats: ['qr-code'] });
+
+  const frameOutput = useFrameOutput({
+    pixelFormat: 'yuv',
+    onFrame(frame) {
+      'worklet';
+      if (scannedShared.value) { frame.dispose(); return; }
+
+      const barcodes = barcodeScanner.scanCodes(frame);
+      if (barcodes.length === 0) { frame.dispose(); return; }
+
+      const barcode = barcodes[0];
+      const value   = barcode.rawValue;
+      const points  = barcode.cornerPoints;
+
+      if (!value || !points || points.length < 4) { frame.dispose(); return; }
+
+      // Convertir les 4 coins frame → camera coordinates dans le worklet
+      // (cette opération est safe dans un worklet)
+      const tl = frame.convertFramePointToCameraPoint(points[0]);
+      const tr = frame.convertFramePointToCameraPoint(points[1]);
+      const br = frame.convertFramePointToCameraPoint(points[2]);
+      const bl = frame.convertFramePointToCameraPoint(points[3]);
+
+      scannedShared.value = true;
+
+      // Passer les camera points au thread JS
+      // La conversion camera → view se fait là-bas via cameraRef
+      runOnJS(handleCameraPoints)(
+        value,
+        tl.x, tl.y,
+        tr.x, tr.y,
+        br.x, br.y,
+        bl.x, bl.y,
+      );
+
+      frame.dispose();
+    },
   });
 
-  // ── Permission refusée ────────────────────────────────────────────────────
   if (!hasPermission) {
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: theme.background }]}>
         <View style={s.center}>
-          <Text style={[s.errorText, { color: theme.text.primary }]}>
-            Permission caméra requise
-          </Text>
+          <Text style={[s.errorText, { color: theme.text.primary }]}>Permission caméra requise</Text>
           <TouchableOpacity onPress={requestPermission}>
             <Text style={[s.link, { color: theme.primary }]}>Autoriser</Text>
           </TouchableOpacity>
@@ -158,31 +189,27 @@ export function QRCodeScannerScreen({ navigation }: Props) {
     );
   }
 
-  // ── Caméra non disponible ─────────────────────────────────────────────────
   if (!device) {
     return (
       <SafeAreaView style={[s.safe, { backgroundColor: theme.background }]}>
         <View style={s.center}>
           <Loader size="large" />
-          <Text style={[s.errorText, { color: theme.text.secondary }]}>
-            Initialisation caméra...
-          </Text>
+          <Text style={[s.errorText, { color: theme.text.secondary }]}>Initialisation caméra...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Scanner ───────────────────────────────────────────────────────────────
   return (
     <View style={s.container}>
       <Camera
+        ref={cameraRef}
         style={StyleSheet.absoluteFill}
         device={device}
         isActive={isFocused && !scanned}
-        outputs={[scannerOutput]}
+        outputs={[frameOutput]}
       />
 
-      {/* Masques sombres */}
       <View style={s.maskTop} />
       <View style={s.maskMiddle}>
         <View style={s.maskSide} />
@@ -191,13 +218,11 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       </View>
       <View style={s.maskBottom} />
 
-      {/* 4 coins animés */}
       <AnimatedCorner x={tlX} y={tlY} type="TL" color={cornerColor} />
       <AnimatedCorner x={trX} y={trY} type="TR" color={cornerColor} />
       <AnimatedCorner x={blX} y={blY} type="BL" color={cornerColor} />
       <AnimatedCorner x={brX} y={brY} type="BR" color={cornerColor} />
 
-      {/* Header */}
       <SafeAreaView style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <ArrowLeft size={22} color="white" />
