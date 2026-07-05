@@ -11,8 +11,9 @@ import {
 } from 'react-native-vision-camera';
 import { useBarcodeScanner } from 'react-native-vision-camera-barcode-scanner';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, runOnJS,
+  useSharedValue, useAnimatedStyle, withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { Loader } from '@/components/Loader';
@@ -94,11 +95,8 @@ export function QRCodeScannerScreen({ navigation }: Props) {
     ]);
   }, [reset]);
 
-  // Reçoit les camera points (après convertFramePointToCameraPoint dans le worklet)
-  // et fait la conversion finale → view coordinates via cameraRef
   const handleCameraPoints = useCallback((
     value: string,
-    // 4 coins en camera coordinates : TL, TR, BR, BL
     tlCx: number, tlCy: number,
     trCx: number, trCy: number,
     brCx: number, brCy: number,
@@ -131,7 +129,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       setScanned(true);
       setTimeout(() => showAlert(value), 600);
     } catch (e) {
-      // convertCameraPointToViewPoint peut throw si la vue n'est pas prête
       scannedShared.value = false;
     }
   }, [showAlert]);
@@ -153,8 +150,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       if (!value || !points || points.length < 4) { frame.dispose(); return; }
 
-      // Convertir les 4 coins frame → camera coordinates dans le worklet
-      // (cette opération est safe dans un worklet)
       const tl = frame.convertFramePointToCameraPoint(points[0]);
       const tr = frame.convertFramePointToCameraPoint(points[1]);
       const br = frame.convertFramePointToCameraPoint(points[2]);
@@ -162,9 +157,9 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       scannedShared.value = true;
 
-      // Passer les camera points au thread JS
-      // La conversion camera → view se fait là-bas via cameraRef
-      runOnJS(handleCameraPoints)(
+      // ✅ scheduleOnRN avec la fonction et tous ses arguments
+      scheduleOnRN(
+        handleCameraPoints,
         value,
         tl.x, tl.y,
         tr.x, tr.y,
