@@ -17,6 +17,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { Loader } from '@/components/Loader';
+import api from '@/services/api'; // 👈 AJOUTÉ
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const FRAME_SIZE  = SCREEN_W * 0.65;
@@ -89,12 +90,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
     setScanned(false);
   }, []);
 
-  const showAlert = useCallback((value: string) => {
-    Alert.alert('QR Code détecté ✓', value, [
-      { text: 'Scanner à nouveau', onPress: reset },
-    ]);
-  }, [reset]);
-
   const handleCameraPoints = useCallback((
     value: string,
     tlCx: number, tlCy: number,
@@ -127,12 +122,30 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       cornerColor.value = '#22C55E';
       setScanned(true);
-      setTimeout(() => showAlert(value), 600);
+      
+      // 👈 REQUÊTE API MODIFIÉE
+      setTimeout(async () => {
+        try {
+          const response = await api.get(`/users/${value}`);
+          const user = response.data;
+          Alert.alert(
+            '✓ Utilisateur trouvé',
+            `Nom : ${user.prenom} ${user.nom}\nEmail : ${user.email}\nTél : ${user.telephone}`,
+            [{ text: 'Scanner à nouveau', onPress: reset }],
+          );
+        } catch {
+          Alert.alert(
+            'Introuvable',
+            `Aucun utilisateur avec l'ID "${value}"`,
+            [{ text: 'Scanner à nouveau', onPress: reset }],
+          );
+        }
+      }, 600);
 
     } catch (e) {
       scannedShared.value = false;
     }
-  }, [showAlert]);
+  }, [reset]);
 
   const barcodeScanner = useBarcodeScanner({ barcodeFormats: ['qr-code'] });
 
@@ -158,7 +171,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       scannedShared.value = true;
 
-      // ✅ scheduleOnRN(fonction, args...)
       scheduleOnRN(
         handleCameraPoints,
         value,

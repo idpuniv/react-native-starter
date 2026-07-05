@@ -24,6 +24,12 @@ const FEATURES: Feature[] = [
     description: 'Génération et scan de QR codes',
     screen:      'QRCode',
   },
+  {
+  id:          'qrcode-generator',
+  title:       'Générer un QR Code',
+  description: 'Créer un QR code depuis un texte ou un ID utilisateur',
+  screen:      'QRCodeGenerator',
+},
   // Ajouter les prochaines features ici
 ];
 
