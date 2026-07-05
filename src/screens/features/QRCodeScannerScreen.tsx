@@ -94,11 +94,8 @@ export function QRCodeScannerScreen({ navigation }: Props) {
     ]);
   }, [reset]);
 
-  // Reçoit les camera points (après convertFramePointToCameraPoint dans le worklet)
-  // et fait la conversion finale → view coordinates via cameraRef
   const handleCameraPoints = useCallback((
     value: string,
-    // 4 coins en camera coordinates : TL, TR, BR, BL
     tlCx: number, tlCy: number,
     trCx: number, trCy: number,
     brCx: number, brCy: number,
@@ -113,25 +110,30 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       const br = cam.convertCameraPointToViewPoint({ x: brCx, y: brCy });
       const bl = cam.convertCameraPointToViewPoint({ x: blCx, y: blCy });
 
-      const left   = Math.min(tl.x, bl.x);
-      const top    = Math.min(tl.y, tr.y);
-      const right  = Math.max(tr.x, br.x);
-      const bottom = Math.max(bl.y, br.y);
+      // ✅ LOGS DES COORDONNÉES
+      console.log('🔴 TL:', Math.round(tl.x), Math.round(tl.y));
+      console.log('🔴 TR:', Math.round(tr.x), Math.round(tr.y));
+      console.log('🔴 BR:', Math.round(br.x), Math.round(br.y));
+      console.log('🔴 BL:', Math.round(bl.x), Math.round(bl.y));
 
-      tlX.value = withTiming(left,   ANIM_CONFIG);
-      tlY.value = withTiming(top,    ANIM_CONFIG);
-      trX.value = withTiming(right,  ANIM_CONFIG);
-      trY.value = withTiming(top,    ANIM_CONFIG);
-      blX.value = withTiming(left,   ANIM_CONFIG);
-      blY.value = withTiming(bottom, ANIM_CONFIG);
-      brX.value = withTiming(right,  ANIM_CONFIG);
-      brY.value = withTiming(bottom, ANIM_CONFIG);
+      const centerX = Math.round((tl.x + tr.x + br.x + bl.x) / 4);
+      const centerY = Math.round((tl.y + tr.y + br.y + bl.y) / 4);
+      console.log('🎯 CENTRE X Y:', centerX, centerY);
+
+      // ✅ LOGS DES COORDONNÉES CAMÉRA BRUTES
+      console.log('📷 TL CAM:', Math.round(tlCx), Math.round(tlCy));
+      console.log('📷 TR CAM:', Math.round(trCx), Math.round(trCy));
+      console.log('📷 BR CAM:', Math.round(brCx), Math.round(brCy));
+      console.log('📷 BL CAM:', Math.round(blCx), Math.round(blCy));
+
+      // ✅ LE CADRE DEVIENT VERT
       cornerColor.value = '#22C55E';
 
+      // ✅ ALERTE
       setScanned(true);
       setTimeout(() => showAlert(value), 600);
+
     } catch (e) {
-      // convertCameraPointToViewPoint peut throw si la vue n'est pas prête
       scannedShared.value = false;
     }
   }, [showAlert]);
@@ -153,8 +155,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       if (!value || !points || points.length < 4) { frame.dispose(); return; }
 
-      // Convertir les 4 coins frame → camera coordinates dans le worklet
-      // (cette opération est safe dans un worklet)
       const tl = frame.convertFramePointToCameraPoint(points[0]);
       const tr = frame.convertFramePointToCameraPoint(points[1]);
       const br = frame.convertFramePointToCameraPoint(points[2]);
@@ -162,8 +162,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       scannedShared.value = true;
 
-      // Passer les camera points au thread JS
-      // La conversion camera → view se fait là-bas via cameraRef
       runOnJS(handleCameraPoints)(
         value,
         tl.x, tl.y,
