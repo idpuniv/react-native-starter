@@ -11,8 +11,9 @@ import {
 } from 'react-native-vision-camera';
 import { useBarcodeScanner } from 'react-native-vision-camera-barcode-scanner';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, runOnJS,
+  useSharedValue, useAnimatedStyle, withTiming,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { ArrowLeft } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { Loader } from '@/components/Loader';
@@ -110,7 +111,6 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       const br = cam.convertCameraPointToViewPoint({ x: brCx, y: brCy });
       const bl = cam.convertCameraPointToViewPoint({ x: blCx, y: blCy });
 
-      // ✅ LOGS DES COORDONNÉES
       console.log('🔴 TL:', Math.round(tl.x), Math.round(tl.y));
       console.log('🔴 TR:', Math.round(tr.x), Math.round(tr.y));
       console.log('🔴 BR:', Math.round(br.x), Math.round(br.y));
@@ -120,16 +120,12 @@ export function QRCodeScannerScreen({ navigation }: Props) {
       const centerY = Math.round((tl.y + tr.y + br.y + bl.y) / 4);
       console.log('🎯 CENTRE X Y:', centerX, centerY);
 
-      // ✅ LOGS DES COORDONNÉES CAMÉRA BRUTES
       console.log('📷 TL CAM:', Math.round(tlCx), Math.round(tlCy));
       console.log('📷 TR CAM:', Math.round(trCx), Math.round(trCy));
       console.log('📷 BR CAM:', Math.round(brCx), Math.round(brCy));
       console.log('📷 BL CAM:', Math.round(blCx), Math.round(blCy));
 
-      // ✅ LE CADRE DEVIENT VERT
       cornerColor.value = '#22C55E';
-
-      // ✅ ALERTE
       setScanned(true);
       setTimeout(() => showAlert(value), 600);
 
@@ -162,7 +158,9 @@ export function QRCodeScannerScreen({ navigation }: Props) {
 
       scannedShared.value = true;
 
-      runOnJS(handleCameraPoints)(
+      // ✅ scheduleOnRN(fonction, args...)
+      scheduleOnRN(
+        handleCameraPoints,
         value,
         tl.x, tl.y,
         tr.x, tr.y,
