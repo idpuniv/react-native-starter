@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { ArrowLeft, RefreshCw } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
-import api from '@/services/api';
+import { useUser } from '@/hooks/useUsers';
 
 interface User {
   id:     string | number;
@@ -19,24 +19,8 @@ interface Props { navigation: any; }
 
 export function QRCodeGeneratorScreen({ navigation }: Props) {
   const { theme } = useTheme();
-  const [user, setUser]       = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
 
-  const fetchUser = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await api.get('/users/1');
-      setUser(response.data);
-    } catch {
-      setError('Impossible de charger le profil');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { fetchUser(); }, []);
+  const { data: user, isLoading, error, refetch } = useUser(1);
 
   return (
     <View style={[s.root, { backgroundColor: theme.primary }]}>
@@ -47,7 +31,7 @@ export function QRCodeGeneratorScreen({ navigation }: Props) {
             <ArrowLeft size={22} color="white" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Mon QR Code</Text>
-          <TouchableOpacity onPress={fetchUser} style={s.iconBtn}>
+          <TouchableOpacity onPress={refetch} style={s.iconBtn}>
             <RefreshCw size={20} color="white" />
           </TouchableOpacity>
         </View>
@@ -68,7 +52,7 @@ export function QRCodeGeneratorScreen({ navigation }: Props) {
 
       {/* Carte QR Code */}
       <View style={s.card}>
-        {loading ? (
+        {isLoading ? (
           <View style={s.loaderBox}>
             <ActivityIndicator size="large" color={theme.primary} />
             <Text style={[s.loadingText, { color: theme.text.secondary }]}>
@@ -80,7 +64,7 @@ export function QRCodeGeneratorScreen({ navigation }: Props) {
             <Text style={[s.errorText, { color: theme.error }]}>{error}</Text>
             <TouchableOpacity
               style={[s.retryBtn, { backgroundColor: theme.primary }]}
-              onPress={fetchUser}
+              onPress={refetch}
             >
               <Text style={s.retryBtnText}>Réessayer</Text>
             </TouchableOpacity>

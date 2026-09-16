@@ -1,19 +1,13 @@
 import React from 'react';
 import { ThemeProvider } from './ThemeProvider';
+import { QueryProvider } from './QueryProvider';
 
-interface AppProviderProps {
-  children: React.ReactNode;
-}
-
-/**
- * Compose tous les providers dans le bon ordre.
- * ThemeProvider en premier
- * Ajouter un nouveau provider ici sans toucher à App.tsx.
- */
-export function AppProvider({ children }: AppProviderProps) {
+export function AppProvider({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
+      <QueryProvider>
         {children}
+      </QueryProvider>
     </ThemeProvider>
   );
 }

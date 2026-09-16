@@ -12,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
 import registerService from '@/services/register.service';
+import { useCreateUser } from '@/hooks/useUsers';
 
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -51,13 +52,15 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
   });
 
 
+  const createUser = useCreateUser();
+
   const onSubmit = async (data: RegisterFormData) => {
     try {
       const { confirmerMotDePasse, ...payload } = data;
-      const result = await registerService.register(payload);
+      await createUser.mutateAsync(payload);
       Alert.alert(
         'Inscription réussie ✓',
-        `Bienvenue ${result.prenom} ${result.nom} !`,
+        `Bienvenue ${data.prenom} ${data.nom} !`,
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     } catch (e: any) {
@@ -190,7 +193,7 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
           <Button
             label="S'inscrire"
             onPress={handleSubmit(onSubmit)}
-            isLoading={isSubmitting}
+            isLoading={createUser.isPending}
             style={s.submitBtn}
           />
         </ScrollView>
